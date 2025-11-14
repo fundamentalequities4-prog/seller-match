@@ -1,0 +1,481 @@
+/*
+SellerMatch - Single-file React component (Tailwind CSS)
+
+How to use:
+1. Create a new React app (Vite or Create React App).
+2. Install dependencies: none required for UI-only preview. For full product, add: stripe, axios, react-router-dom, tailwindcss, framer-motion.
+3. Add Tailwind to the project (follow Tailwind docs). This component uses Tailwind utility classes.
+4. Place this file as `src/App.jsx` and run `npm run dev` or `npm start`.
+
+Environment / Backend expectations (not included):
+- Authentication endpoints: POST /api/auth/login, POST /api/auth/register
+- Listings endpoints: GET /api/listings, POST /api/listings, GET /api/listings/:id
+- Payments: server-side Stripe integration to create Checkout Sessions or Subscriptions
+- Image uploads: use Cloudinary or S3; frontend should get signed upload URLs from /api/uploads
+
+Notes on production:
+- Use HTTPS, Helmet, rate limiting, input validation, and strong CORS rules.
+- Store images in object storage; don't store base64 blobs in DB.
+- Use a relational DB (Postgres) or NoSQL (Mongo) depending on needs. Add indexes on searchable fields.
+
+This single-file app is a polished UI skeleton with mock data and hooks where you'd call real APIs.
+*/
+
+import React, { useState, useMemo } from 'react';
+
+// Mock data (replace with real API calls)
+const MOCK_LISTINGS = [
+  { id: '1', title: 'iPhone 12 - Good condition', price: 4500, location: 'Johannesburg', category: 'Electronics', image: 'https://picsum.photos/seed/1/400/300' },
+  { id: '2', title: 'Wooden Dining Table (6 seater)', price: 3200, location: 'Cape Town', category: 'Home', image: 'https://picsum.photos/seed/2/400/300' },
+  { id: '3', title: 'Mountain Bike - barely used', price: 2200, location: 'Durban', category: 'Sporting Goods', image: 'https://picsum.photos/seed/3/400/300' },
+];
+
+export default function App() {
+  const [listings, setListings] = useState(MOCK_LISTINGS);
+  const [query, setQuery] = useState('');
+  const [category, setCategory] = useState('All');
+  const [showCreate, setShowCreate] = useState(false);
+  const [showSubscribe, setShowSubscribe] = useState(false);
+  const [user, setUser] = useState(null); // mock auth
+
+  const categories = useMemo(() => ['All', 'Electronics', 'Home', 'Sporting Goods', 'Fashion', 'Vehicles'], []);
+
+  const filtered = listings.filter(l => {
+    const q = query.trim().toLowerCase();
+    if (category !== 'All' && l.category !== category) return false;
+    if (!q) return true;
+    return l.title.toLowerCase().includes(q) || l.location.toLowerCase().includes(q);
+  });
+
+  function handleCreate(newListing) {
+    // In production: POST /api/listings then refresh from API
+    setListings(prev => [{ ...newListing, id: String(prev.length + 1) }, ...prev]);
+    setShowCreate(false);
+  }
+
+  function handleSubscribe() {
+    // In production: call backend to create Stripe Checkout or Subscription
+    setUser({ name: user?.name || 'Subscriber', subscribed: true });
+    setShowSubscribe(false);
+    alert('Thank you — subscription simulated (wire this to Stripe server-side).');
+  }
+
+  return (
+    <div className="min-h-screen bg-gray-50 text-gray-900">
+      <Header onCreate={() => {
+        if (user?.subscribed) setShowCreate(true);
+        else setShowSubscribe(true);
+      }} user={user} onLogin={() => setUser({ name: 'Chad', subscribed: false })} onLogout={() => setUser(null)} />
+
+      <main className="max-w-6xl mx-auto p-6">
+        <Hero />
+
+        <div className="flex flex-col md:flex-row gap-6 mt-6">
+          <div className="flex-1">
+            <SearchBar query={query} setQuery={setQuery} />
+          </div>
+          <div className="w-full md:w-64">
+            <CategoryFilter categories={categories} value={category} onChange={setCategory} />
+          </div>
+        </div>
+
+        <div className="mt-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+            {filtered.map(l => (
+              <ListingCard key={l.id} listing={l} />
+            ))}
+          </div>
+
+          {filtered.length === 0 && (
+            <div className="mt-8 text-center text-gray-600">No listings match your search. Try another keyword or category.</div>
+          )}
+        </div>
+
+        <div className="mt-10 p-6 bg-white rounded-xl shadow">
+          <h3 className="text-lg font-semibold">Why SellerMatch?</h3>
+          <ul className="list-disc ml-5 mt-3 text-sm text-gray-700">
+            <li>Low subscription fee for serious sellers (no bidding wars for basic accounts).</li>
+            <li>Curated categories and in-site messaging between buyer and seller.</li>
+            <li>Secure payments through integrated providers (Stripe / PayFast / PayGate — server-side).</li>
+          </ul>
+        </div>
+
+      </main>
+
+      <Footer />
+
+      {showCreate && <CreateListingModal onClose={() => setShowCreate(false)} onCreate={handleCreate} />}
+      {showSubscribe && <SubscribeModal onClose={() => setShowSubscribe(false)} onSubscribe={handleSubscribe} />}
+    </div>
+  );
+}
+
+function Header({ onCreate, user, onLogin, onLogout }) {
+  return (
+    <header className="bg-white border-b">
+      <div className="max-w-6xl mx-auto flex items-center justify-between p-4">
+        <div className="flex items-center gap-4">
+          <div className="text-2xl font-bold text-indigo-600">SellerMatch</div>
+          <nav className="hidden md:flex gap-3 text-sm text-gray-700">
+            <a className="hover:underline">Browse</a>
+            <a className="hover:underline">How it works</a>
+            <a className="hover:underline">Pricing</a>
+          </nav>
+        </div>
+
+        <div className="flex items-center gap-3">
+          <button className="px-4 py-2 rounded-lg bg-indigo-600 text-white text-sm" onClick={onCreate}>Create Listing</button>
+
+          {user ? (
+            <div className="flex items-center gap-2">
+              <div className="text-sm">Hi, <strong>{user.name}</strong></div>
+              <button onClick={onLogout} className="text-sm px-3 py-1 border rounded">Log out</button>
+            </div>
+          ) : (
+            <div className="flex gap-2">
+              <button onClick={onLogin} className="text-sm px-3 py-1 border rounded">Log in</button>
+              <button className="text-sm px-3 py-1 rounded bg-gray-100">Sign up</button>
+            </div>
+          )}
+        </div>
+      </div>
+    </header>
+  );
+}
+
+function Hero() {
+  return (
+    <section className="bg-white rounded-xl p-6 shadow mt-6">
+      <div className="flex flex-col md:flex-row items-center gap-6">
+        <div className="flex-1">
+          <h1 className="text-3xl md:text-4xl font-bold">Sell faster. Buy smarter.</h1>
+          <p className="mt-3 text-gray-600">SellerMatch connects local buyers and sellers with a focused, low-fee subscription model — no surprise listing fees, just one small recurring price for power users.</p>
+          <div className="mt-4 flex gap-3">
+            <button className="px-5 py-2 rounded-lg bg-indigo-600 text-white" onClick={() => window.scrollTo({ top: 400, behavior: 'smooth' })}>Browse listings</button>
+            <button className="px-5 py-2 rounded-lg border" onClick={() => window.scrollTo({ top: 400, behavior: 'smooth' })}>How it works</button>
+          </div>
+        </div>
+
+        <div className="w-full md:w-1/3">
+          <div className="bg-gradient-to-br from-indigo-50 to-white rounded-lg p-4">
+            <img src="https://picsum.photos/seed/hero/560/360" alt="hero" className="rounded" />
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function SearchBar({ query, setQuery }) {
+  return (
+    <div className="bg-white p-4 rounded-lg shadow flex items-center gap-3">
+      <input value={query} onChange={e => setQuery(e.target.value)} className="flex-1 p-3 border rounded" placeholder="Search items, locations or keywords" />
+      <button className="px-4 py-2 rounded bg-indigo-600 text-white">Search</button>
+    </div>
+  );
+}
+
+function CategoryFilter({ categories, value, onChange }) {
+  return (
+    <div className="bg-white p-4 rounded-lg shadow">
+      <label className="block text-sm font-medium text-gray-700">Category</label>
+      <select value={value} onChange={e => onChange(e.target.value)} className="mt-2 w-full p-2 border rounded">
+        {categories.map(c => <option key={c} value={c}>{c}</option>)}
+      </select>
+
+      <div className="mt-4">
+        <h4 className="text-sm font-semibold">Top locations</h4>
+        <div className="mt-2 text-sm text-gray-600">Johannesburg • Cape Town • Durban</div>
+      </div>
+    </div>
+  );
+}
+
+function ListingCard({ listing }) {
+  return (
+    <article className="bg-white rounded-lg shadow overflow-hidden">
+      <img src={listing.image} alt={listing.title} className="w-full h-44 object-cover" />
+      <div className="p-4">
+        <h3 className="font-semibold text-lg">{listing.title}</h3>
+        <div className="mt-2 flex items-center justify-between">
+          <div className="text-sm text-gray-600">{listing.location}</div>
+          <div className="font-semibold">R{listing.price}</div>
+        </div>
+        <div className="mt-3 flex gap-2">
+          <button className="px-3 py-1 rounded border text-sm">Message Seller</button>
+          <button className="px-3 py-1 rounded bg-indigo-600 text-white text-sm">Buy now</button>
+        </div>
+      </div>
+    </article>
+  );
+}
+
+function CreateListingModal({ onClose, onCreate }) {
+  const [form, setForm] = useState({ title: '', price: '', location: '', category: 'Electronics', image: '' });
+
+  function submit(e) {
+    e.preventDefault();
+    // validation
+    if (!form.title || !form.price) return alert('Title and price are required');
+    onCreate({ ...form, price: Number(form.price) });
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
+      <div className="bg-white rounded-lg w-full max-w-xl p-6">
+        <div className="flex items-center justify-between">
+          <h3 className="text-lg font-semibold">Create listing</h3>
+          <button onClick={onClose} className="text-gray-600">Close</button>
+        </div>
+
+        <form onSubmit={submit} className="mt-4 space-y-3">
+          <div>
+            <label className="block text-sm">Title</label>
+            <input value={form.title} onChange={e => setForm(prev => ({ ...prev, title: e.target.value }))} className="w-full p-2 border rounded" />
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-sm">Price (ZAR)</label>
+              <input value={form.price} onChange={e => setForm(prev => ({ ...prev, price: e.target.value }))} className="w-full p-2 border rounded" />
+            </div>
+            <div>
+              <label className="block text-sm">Location</label>
+              <input value={form.location} onChange={e => setForm(prev => ({ ...prev, location: e.target.value }))} className="w-full p-2 border rounded" />
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-sm">Category</label>
+            <select value={form.category} onChange={e => setForm(prev => ({ ...prev, category: e.target.value }))} className="w-full p-2 border rounded">
+              <option>Electronics</option>
+              <option>Home</option>
+              <option>Sporting Goods</option>
+              <option>Fashion</option>
+              <option>Vehicles</option>
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-sm">Image URL (for preview)</label>
+            <input value={form.image} onChange={e => setForm(prev => ({ ...prev, image: e.target.value }))} className="w-full p-2 border rounded" placeholder="https://..." />
+          </div>
+
+          <div className="flex justify-end gap-3">
+            <button type="button" onClick={onClose} className="px-4 py-2 border rounded">Cancel</button>
+            <button type="submit" className="px-4 py-2 rounded bg-indigo-600 text-white">Create listing</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+function SubscribeModal({ onClose, onSubscribe }) {
+  return (
+    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
+      <div className="bg-white rounded-lg w-full max-w-md p-6">
+        <div className="flex items-center justify-between">
+          <h3 className="text-lg font-semibold">Subscribe to SellerMatch</h3>
+          <button onClick={onClose} className="text-gray-600">Close</button>
+        </div>
+
+        <div className="mt-4">
+          <p className="text-gray-700">Become a SellerMatch subscriber to create unlimited listings and access premium features like featured placement and analytics. Monthly fee: R49 / month (example).</p>
+
+          <div className="mt-6 flex flex-col gap-3">
+            <button onClick={onSubscribe} className="px-4 py-2 rounded bg-indigo-600 text-white">Subscribe with Card (Simulated)</button>
+            <button onClick={() => alert('Redirect to local payment gateway demo')} className="px-4 py-2 rounded border">Pay via Local Gateway</button>
+
+            <div className="text-xs text-gray-500 mt-2">In production: replace Subscribe handler with a call to your backend that creates a Stripe Checkout Session or subscription and redirects user to Stripe Checkout.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function Footer() {
+  return (
+    <footer className="mt-10 bg-white border-t">
+      <div className="max-w-6xl mx-auto p-6 text-sm text-gray-600 flex flex-col md:flex-row items-center justify-between">
+        <div>© {new Date().getFullYear()} SellerMatch — Built for local selling.</div>
+        <div className="flex gap-4 mt-3 md:mt-0">
+          <a className="hover:underline">Terms</a>
+          <a className="hover:underline">Privacy</a>
+          <a className="hover:underline">Help</a>
+        </div>
+      </div>
+    </footer>
+  );
+}
+
+
+---
+
+# DEPLOYMENT PACKAGE — One-Click / Manual Deploy Instructions
+
+> This section contains everything you need to deploy the SellerMatch demo (clean, premium design) to Vercel + Supabase in the **seller-match (EU - Frankfurt)** region, with PayFast sandbox preconfigured. The files below are intended to be copied into a GitHub repository (or zipped and uploaded directly in Vercel import). Follow the short instructions in the README to publish the site.
+
+---
+
+## Included files (copy these into a GitHub repo root)
+
+1. `package.json` — frontend deps + build commands
+2. `vite.config.js` — Vite config for React
+3. `src/App.jsx` — the React single-file app (already on the canvas)
+4. `src/main.jsx` — React entry
+5. `public/_redirects` — (optional) for pretty URLs
+6. `vercel.json` — Vercel build settings
+7. `supabase/schema.sql` — SQL to create listings, users metadata
+8. `README_DEPLOY.md` — step-by-step deploy guide (below)
+9. `.env.example` — list of environment variables to paste into Vercel
+10. `netlify.toml` — (not required, optional) — ignored if using Vercel
+11. `admin-instructions.md` — how to log into admin and create the first user
+
+---
+
+### vercel.json (example)
+
+```json
+{
+  "version": 2,
+  "builds": [
+    { "src": "package.json", "use": "@vercel/static-build" }
+  ],
+  "routes": [
+    { "src": "/(.*)", "dest": "/index.html" }
+  ]
+}
+```
+
+---
+
+### .env.example (fill and paste into Vercel environment variables when importing)
+
+```
+VITE_SUPABASE_URL=https://<your-supabase-project-ref>.supabase.co
+VITE_SUPABASE_ANON_KEY=<anon-public-key>
+SUPABASE_SERVICE_ROLE_KEY=<service_role_key>  # store in Supabase secrets or Vercel but never in client
+PAYFAST_MERCHANT_ID=<payfast_merchant_id>
+PAYFAST_MERCHANT_KEY=<payfast_merchant_key>
+PAYFAST_SANDBOX=true
+NEXT_PUBLIC_SUBSCRIPTION_PRICE_RAND=29
+ADMIN_EMAIL=fundamentalequities4@gmail.com
+```
+
+> NOTE: VITE_ prefix is used for client-visible env values. Keep `SUPABASE_SERVICE_ROLE_KEY` strictly server-side.
+
+---
+
+### supabase/schema.sql (run in Supabase SQL editor after project creation)
+
+```sql
+-- Basic tables for SellerMatch
+create table listings (
+  id uuid primary key default gen_random_uuid(),
+  title text not null,
+  description text,
+  price numeric not null,
+  currency text default 'ZAR',
+  location text,
+  category text,
+  image_url text,
+  seller_id uuid references auth.users(id) on delete set null,
+  created_at timestamptz default now()
+);
+
+create table subscriptions (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid references auth.users(id) on delete cascade,
+  payfast_token text,
+  status text,
+  created_at timestamptz default now()
+);
+
+-- Row-level security is recommended; enable policies for public client usage
+```
+
+---
+
+### README_DEPLOY.md (step-by-step)
+
+1. **Create a GitHub repo** named `seller-match` (private or public).
+2. **Copy all files** from this canvas into the repo root (or download the canvas export and unzip into the repo).
+3. **Import repository into Vercel**
+   - In Vercel, click **Import Project** → connect to GitHub → select `seller-match`.
+   - During import, set these Environment Variables from `.env.example` (you'll get the Supabase values in step 5):
+     - `VITE_SUPABASE_URL`
+     - `VITE_SUPABASE_ANON_KEY`
+     - `SUPABASE_SERVICE_ROLE_KEY` (server-only)
+     - `PAYFAST_MERCHANT_ID`
+     - `PAYFAST_MERCHANT_KEY`
+     - `PAYFAST_SANDBOX=true`
+     - `NEXT_PUBLIC_SUBSCRIPTION_PRICE_RAND=29`
+     - `ADMIN_EMAIL=fundamentalequities4@gmail.com`
+4. **Create a Supabase project**
+   - Go to Supabase dashboard → New Project → Project name: `seller-match` → Region: **EU (Frankfurt)** → create.
+   - In Supabase, go to **Settings → API** and copy the Project URL and `anon` key. Paste them into Vercel env: `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY`.
+   - Go to **Settings → Service API keys**, copy the `service_role` key. Paste it in Vercel env `SUPABASE_SERVICE_ROLE_KEY` (set as secret / server only).
+5. **Run the SQL schema**
+   - In Supabase → SQL Editor → paste `supabase/schema.sql` and run. This creates the `listings` and `subscriptions` tables.
+6. **Configure Storage (optional)**
+   - In Supabase → Storage → create bucket `images` and set public rules as needed.
+7. **PayFast sandbox**
+   - Create a PayFast sandbox merchant account and get `merchant_id` and `merchant_key`. Set those in Vercel env variables.
+   - Use `PAYFAST_SANDBOX=true` for testing.
+8. **Deploy**
+   - Click `Deploy` in Vercel. The site will be available at `https://<your-vercel-subdomain>.vercel.app` (you can set `sellermatch.vercel.app` if available).
+9. **Create admin user**
+   - Open the site → Sign up with the admin email `fundamentalequities4@gmail.com` → verify email (Supabase will send verification link). The admin user registration flow can be used to promote the user in Supabase Auth metadata (`role: 'admin'`). Alternatively, you can run a SQL snippet to set a row in a `user_profiles` table to mark admin status. See `admin-instructions.md` for exact SQL.
+
+---
+
+### admin-instructions.md (quick)
+
+Run this SQL in Supabase to create an admin flag for your user (after they register):
+
+```sql
+-- Mark the user as admin (replace the email with the real user email)
+create table if not exists user_profiles (
+  id uuid references auth.users(id) primary key,
+  email text,
+  role text default 'user',
+  created_at timestamptz default now()
+);
+
+-- Insert or update the admin row
+with u as (
+  select id, email from auth.users where email = 'fundamentalequities4@gmail.com'
+)
+insert into user_profiles (id, email, role)
+select id, email, 'admin' from u
+on conflict (id) do update set role = 'admin';
+```
+
+After that, the app's admin UI will check `user_profiles.role = 'admin'` to show admin options.
+
+---
+
+### Quick testing checklist (after deploy)
+
+- [ ] Signup as `fundamentalequities4@gmail.com` and confirm email
+- [ ] Run admin SQL snippet to mark user as admin
+- [ ] Login and go to `/admin` to confirm admin panel access
+- [ ] Create a test listing
+- [ ] Use PayFast sandbox to simulate subscribing at R29/month
+
+---
+
+### Notes & support
+
+- I packaged a premium UI and blank data state in `src/App.jsx` (already on this canvas). Replace mock image placeholders with real image upload to Supabase Storage when ready.
+- When you want me to switch PayFast from sandbox to live, provide your live `merchant_id` and `merchant_key` and I will update the server-side webhook and environment variables instructions.
+
+---
+
+If you want, I can now: 
+- create a downloadable ZIP of the repo contents in the canvas, or
+- paste each of the files into the canvas so you can copy them into a new GitHub repo.
+
+Tell me which you prefer and I will produce the files inside the canvas immediately.
